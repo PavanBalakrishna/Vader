@@ -1,0 +1,27 @@
+# Local run of the container image, so you can check the thing you are about
+# to deploy rather than the thing you have been developing against.
+#
+#   docker compose up --build     → http://127.0.0.1:8787
+#
+# This is the static console by default, matching render.yaml. To exercise the
+# Agent SDK instead, uncomment the bridge block below.
+
+services:
+  console:
+    build: .
+    # Published on loopback only. Drop the 127.0.0.1 prefix and you have
+    # published your bridge to your local network.
+    ports:
+      - '127.0.0.1:8787:8787'
+    environment:
+      V4D3R_MODE: static
+      # Reached over the published port above, which is what the browser will
+      # send as its Origin.
+      V4D3R_PUBLIC_URL: http://127.0.0.1:8787
+
+      # ── bridge mode ──────────────────────────────────────────────────────
+      # V4D3R_MODE: bridge
+      # V4D3R_ACCESS_TOKEN: ${V4D3R_ACCESS_TOKEN:?set a token before exposing a bridge}
+      # ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?}
+      # V4D3R_TOOLS: none
+    restart: unless-stopped

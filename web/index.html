@@ -15,6 +15,10 @@
   included, is served from this origin. No CDN, no third party that could be
   compromised into reading visitors' API keys.
 
+  connect-src carries 'self' so that a bridge serving this page from its own
+  origin (the Docker/Render deployment) can be reached; the loopback entries
+  are for a bridge running on the visitor's own machine.
+
   If you configure OAuth, add your token endpoint to connect-src.
 -->
 <meta http-equiv="Content-Security-Policy" content="
@@ -22,7 +26,7 @@
   script-src 'self';
   style-src 'self';
   img-src 'self' data:;
-  connect-src https://api.anthropic.com http://127.0.0.1:* http://localhost:*;
+  connect-src 'self' https://api.anthropic.com http://127.0.0.1:* http://localhost:*;
   base-uri 'none';
   form-action 'self';
 " />
