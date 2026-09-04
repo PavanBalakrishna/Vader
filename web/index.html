@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>LORD-V4D3R — Imperial Datalink</title>
+<meta name="description" content="An Imperial cognition construct powered by Claude. Bring your own Anthropic credential; it never leaves your browser." />
+<meta name="color-scheme" content="dark" />
+<!--
+  Defence in depth. Even if something slips past the escaper in app.js, an
+  injected script cannot load code and has no origin it may talk to except
+  Anthropic itself.
+
+  script-src is 'self' only: every byte of JS on this page, the Anthropic SDK
+  included, is served from this origin. No CDN, no third party that could be
+  compromised into reading visitors' API keys.
+
+  If you configure OAuth, add your token endpoint to connect-src.
+-->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'none';
+  script-src 'self';
+  style-src 'self';
+  img-src 'self' data:;
+  connect-src https://api.anthropic.com http://127.0.0.1:* http://localhost:*;
+  base-uri 'none';
+  form-action 'self';
+" />
+<link rel="stylesheet" href="./css/styles.css" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath fill='%23ff2b2b' d='M50 6 18 26v30c0 21 14 32 32 38 18-6 32-17 32-38V26z'/%3E%3Cpath fill='%23050609' d='M50 20 30 32v22c0 14 9 22 20 27 11-5 20-13 20-27V32z'/%3E%3C/svg%3E" />
+</head>
+<body>
+
+<div class="starfield" aria-hidden="true"></div>
+<div class="scanlines" aria-hidden="true"></div>
+
+<div class="shell">
+
+  <header>
+    <svg class="sigil" viewBox="0 0 100 100" aria-hidden="true">
+      <path fill="#ff2b2b"
+            d="M50 4 14 24v32c0 23 15 35 36 40 21-5 36-17 36-40V24z"/>
+      <path fill="#05060a" d="M50 17 26 30v25c0 16 10 25 24 30 14-5 24-14 24-30V30z"/>
+      <path fill="#ff2b2b" d="M50 26 34 35v19c0 11 7 17 16 21 9-4 16-10 16-21V35z" opacity=".45"/>
+      <circle cx="42" cy="45" r="3.4" fill="#ff2b2b"/>
+      <circle cx="58" cy="45" r="3.4" fill="#ff2b2b"/>
+      <path d="M43 60 Q50 66 57 60" stroke="#ff2b2b" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+    </svg>
+
+    <div class="ident">
+      <h1>LORD-V4D3R</h1>
+      <p>Imperial Cognition Construct &middot; Mk IV</p>
+    </div>
+
+    <div class="status-cluster">
+      <span class="chip" id="chip-link" data-state="offline">
+        <span class="led"></span><span id="chip-link-text">No datalink</span>
+      </span>
+      <span class="chip" id="chip-model" data-state="offline">
+        <span class="led"></span><span id="chip-model-text">—</span>
+      </span>
+      <button class="ghost" id="btn-auth">Credentials</button>
+      <button class="ghost" id="btn-purge">Purge</button>
+    </div>
+  </header>
+
+  <main id="transcript" aria-live="polite" aria-label="Conversation transcript"></main>
+
+  <footer>
+    <form class="composer" id="composer">
+      <textarea id="input" rows="1" autocomplete="off" spellcheck="true"
+                placeholder="State your query, Commander…" disabled></textarea>
+      <button id="send" type="submit" disabled>Transmit</button>
+    </form>
+    <div class="hint">
+      <span><kbd>Enter</kbd> transmit &nbsp;·&nbsp; <kbd>Shift</kbd>+<kbd>Enter</kbd> newline</span>
+      <span id="hint-right">Awaiting credentials</span>
+    </div>
+  </footer>
+
+</div>
+
+<!-- ------------------------------------------------------------------ -->
+
+<dialog id="auth">
+  <div class="head">
+    <h2>IMPERIAL CREDENTIALS</h2>
+    <p>Your credential is stored in <b>this browser only</b> and is sent directly to Anthropic.
+       This site has no backend and cannot see it.</p>
+  </div>
+
+  <div class="body">
+    <form id="auth-form" method="dialog">
+      <div class="field">
+        <label for="cred">Anthropic API key or OAuth bearer token</label>
+        <input id="cred" type="password" placeholder="sk-ant-… or an OAuth access token"
+               autocomplete="off" spellcheck="false" />
+      </div>
+
+      <div class="checkline">
+        <input type="checkbox" id="remember" />
+        <label for="remember" class="plain">
+          Remember on this device (otherwise cleared when the tab closes)
+        </label>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="primary" id="auth-save">Establish link</button>
+        <button type="button" id="auth-oauth" disabled>Sign in with OAuth</button>
+        <button type="button" id="auth-bridge">Use local bridge</button>
+        <button type="button" id="auth-cancel">Cancel</button>
+      </div>
+    </form>
+
+    <div class="notice" id="auth-note">
+      <b>Two ways in.</b>
+      <b>Holonet Direct</b> — paste a credential above; the page calls Anthropic straight from your
+      browser. If Anthropic blocks direct browser access for your credential you will see a CORS
+      error, which is expected, not a bug in this app.
+      <b>Imperial Bridge</b> — run <code>npm run bridge</code> from the repo for full OAuth plus the
+      Claude Agent SDK (tools, sessions, filesystem). Nothing is pasted anywhere.
+    </div>
+  </div>
+</dialog>
+
+<script type="module" src="./js/app.js"></script>
+</body>
+</html>

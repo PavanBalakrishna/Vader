@@ -1,0 +1,26 @@
+{
+  "name": "lord-v4d3r",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "LORD-V4D3R - an Imperial chat construct powered by Claude. Static Star Wars themed client for GitHub Pages plus an optional local Claude Agent SDK bridge.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "bridge": "node server/src/index.js",
+    "web": "node server/src/static-only.js",
+    "login": "node server/src/index.js --login",
+    "vendor": "esbuild scripts/vendor-entry.js --bundle --format=esm --platform=browser --target=es2022 --minify --legal-comments=none --outfile=web/js/vendor/anthropic-sdk.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.260",
+    "@anthropic-ai/sdk": "^0.123.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "open": "^10.1.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}
