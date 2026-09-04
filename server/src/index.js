@@ -1,29 +1,57 @@
 /**
  * LORD-V4D3R — Imperial Bridge.
  *
- * A small local server that:
+ * A small server that:
  *   • serves the static console (so you can develop without deploying)
- *   • exposes /api/chat as SSE, backed by the Claude Agent SDK
- *   • performs a real OAuth 2.1 + PKCE login with a loopback redirect
+ *   • in bridge mode, exposes /api/chat as SSE backed by the Claude Agent SDK
+ *   • performs a real OAuth 2.1 + PKCE login
  *
- * It binds to 127.0.0.1 by default. Do not expose it to a network without
- * putting authentication in front of it.
+ * It binds to 127.0.0.1 by default. The container image binds 0.0.0.0 and
+ * defaults to V4D3R_MODE=static, which holds no credential at all. Turning on
+ * bridge mode over a public bind requires V4D3R_ACCESS_TOKEN — see the guard
+ * below, and the Docker section of the README.
  */
 
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { createHash, timingSafeEqual } from 'node:crypto';
 
 import express from 'express';
 import cors from 'cors';
 
-import { PORT, HOST, MODEL, ALLOWED_TOOLS, ALLOWED_ORIGINS, OAUTH } from './config.js';
-import { runTurn } from './agent.js';
+import {
+  PORT,
+  HOST,
+  IS_PUBLIC_BIND,
+  MODE,
+  ACCESS_TOKEN,
+  PUBLIC_URL,
+  MODEL,
+  ALLOWED_TOOLS,
+  ALLOWED_ORIGINS,
+  OAUTH,
+} from './config.js';
 import {
   createPkce,
   authorizeUrl,
   exchangeCode,
   resolveCredential,
 } from './oauth.js';
+
+/**
+ * Refuse to hand the operator's Anthropic credential to the open internet.
+ * An unauthenticated public bridge is a stranger's free inference budget
+ * billed to you, plus read-only filesystem tools pointed at this container.
+ */
+if (MODE === 'bridge' && IS_PUBLIC_BIND && !ACCESS_TOKEN) {
+  console.error(
+    '\n  REFUSING TO START — bridge mode is bound to a public interface with\n' +
+      '  no V4D3R_ACCESS_TOKEN. Anyone who finds the URL would be spending your\n' +
+      '  Anthropic balance. Set V4D3R_ACCESS_TOKEN to a long random string, or\n' +
+      '  run V4D3R_MODE=static and let visitors bring their own credential.\n',
+  );
+  process.exit(1);
+}
 
 const here = dirname(fileURLToPath(import.meta.url));
 const webRoot = join(here, '..', '..', 'web');
@@ -50,16 +78,42 @@ app.get('/health', (_req, res) => {
   res.json({
     ok: true,
     service: 'lord-v4d3r-bridge',
-    runtime: 'claude-agent-sdk',
+    mode: MODE,
+    // The console keys off this to decide whether /api/chat is worth calling
+    // and whether it must present a token first.
+    chat: MODE === 'bridge',
+    authRequired: MODE === 'bridge' && Boolean(ACCESS_TOKEN),
+    runtime: MODE === 'bridge' ? 'claude-agent-sdk' : 'static',
     model: MODEL,
-    tools: ALLOWED_TOOLS,
+    tools: MODE === 'bridge' ? ALLOWED_TOOLS : [],
     credential: credentialInfo.source,
   });
 });
 
 /* ------------------------------------------------------------------ chat -- */
 
+/**
+ * Constant-time-ish bearer check. Node's timingSafeEqual needs equal lengths,
+ * so compare digests of the two strings rather than the strings themselves.
+ */
+function tokenOk(header) {
+  const presented = /^Bearer (.+)$/i.exec(header ?? '')?.[1] ?? '';
+  const digest = (v) => createHash('sha256').update(v).digest();
+  return timingSafeEqual(digest(presented), digest(ACCESS_TOKEN));
+}
+
 app.post('/api/chat', async (req, res) => {
+  if (MODE !== 'bridge') {
+    return res.status(501).json({
+      error:
+        'This deployment runs in static mode and has no agent. ' +
+        'Use your own credential, or point the console at a bridge.',
+    });
+  }
+  if (ACCESS_TOKEN && !tokenOk(req.get('authorization'))) {
+    return res.status(401).json({ error: 'Bridge access token missing or incorrect.' });
+  }
+
   const { messages, sessionId } = req.body ?? {};
   const last = Array.isArray(messages) ? messages.at(-1) : null;
 
@@ -87,6 +141,9 @@ app.post('/api/chat', async (req, res) => {
   });
 
   try {
+    // Imported lazily: the Agent SDK is a heavy dependency and static-mode
+    // deployments should never pay to load it.
+    const { runTurn } = await import('./agent.js');
     for await (const ev of runTurn(last.content, sessionId, controller.signal)) {
       send(ev);
     }
@@ -145,16 +202,28 @@ app.get('/auth/callback', async (req, res) => {
 
 const wantsLogin = process.argv.includes('--login');
 
-credentialInfo = await resolveCredential();
+// Static deployments hold no credential and must not go looking for one on
+// the host — resolveCredential() reads files and env that only matter to a
+// bridge.
+credentialInfo =
+  MODE === 'bridge'
+    ? await resolveCredential()
+    : { source: 'none', detail: 'static mode — visitors supply their own' };
 
 app.listen(PORT, HOST, async () => {
-  const base = `http://${HOST}:${PORT}`;
+  const base = PUBLIC_URL || `http://${HOST}:${PORT}`;
   console.log('');
   console.log('  ██ LORD-V4D3R — IMPERIAL BRIDGE');
+  console.log(`     mode        ${MODE}`);
   console.log(`     console     ${base}`);
   console.log(`     model       ${MODEL}`);
-  console.log(`     tools       ${ALLOWED_TOOLS.join(', ') || '(none)'}`);
+  console.log(`     tools       ${MODE === 'bridge' ? ALLOWED_TOOLS.join(', ') || '(none)' : '(none)'}`);
   console.log(`     credential  ${credentialInfo.source} — ${credentialInfo.detail}`);
+  if (MODE === 'bridge' && !ACCESS_TOKEN) {
+    console.log('     access      OPEN — anyone who can reach this port can use it');
+  } else if (MODE === 'bridge') {
+    console.log('     access      bearer token required');
+  }
   if (!OAUTH.configured) {
     console.log('     oauth       not configured (see .env.example)');
   }

@@ -7,11 +7,19 @@
  * HOLONET  — browser talks straight to api.anthropic.com with the user's own
  *            credential. No server, nothing for the host to see. Requires
  *            Anthropic to allow direct browser access for the credential.
- * BRIDGE   — browser talks to a local Node process running the Claude Agent
- *            SDK, which brings tools, sessions and real OAuth.
+ * BRIDGE   — browser talks to a Node process running the Claude Agent SDK,
+ *            which brings tools, sessions and real OAuth. That process may be
+ *            on the visitor's own machine, or it may be the very server that
+ *            served this page (the container image does both jobs).
  */
 
-import { MODEL_PARAMS, BETAS, ANTHROPIC_BASE_URL, BRIDGE_URL } from './config.js';
+import {
+  MODEL_PARAMS,
+  BETAS,
+  ANTHROPIC_BASE_URL,
+  BRIDGE_CANDIDATES,
+  BRIDGE_TOKEN,
+} from './config.js';
 import { SYSTEM_PROMPT } from './persona.js';
 import { CredentialStore, ensureFresh } from './auth.js';
 
@@ -156,28 +164,65 @@ export const bridge = {
    */
   sessionId: undefined,
 
+  /** Which candidate answered, once one has. */
+  baseUrl: null,
+
+  /** Whether that bridge demands a token — set by available(). */
+  authRequired: false,
+
   reset() {
     this.sessionId = undefined;
   },
 
+  /**
+   * Probe the candidates in order and keep the first that reports it can
+   * actually run a turn.
+   *
+   * `chat: false` matters as much as a failed request: a static deployment
+   * serves this same console and answers /health, but has no agent behind it,
+   * and treating that as a bridge would strand the visitor on a transport
+   * that returns 501 for every message. The container image in static mode is
+   * exactly that case.
+   */
   async available() {
-    try {
-      const res = await fetch(`${BRIDGE_URL}/health`, {
-        signal: AbortSignal.timeout(1500),
-      });
-      return res.ok;
-    } catch {
-      return false;
+    for (const base of BRIDGE_CANDIDATES) {
+      try {
+        const res = await fetch(`${base}/health`, { signal: AbortSignal.timeout(2500) });
+        if (!res.ok) continue;
+        const info = await res.json();
+        // `chat` is absent on bridges predating the static/bridge split; those
+        // always had an agent, so treat undefined as yes.
+        if (info?.chat === false) continue;
+        this.baseUrl = base;
+        this.authRequired = Boolean(info?.authRequired);
+        return true;
+      } catch {
+        // Unreachable, wrong protocol, timed out — try the next candidate.
+      }
     }
+    this.baseUrl = null;
+    return false;
   },
 
   async *stream(messages, { signal } = {}) {
-    const res = await fetch(`${BRIDGE_URL}/api/chat`, {
+    const base = this.baseUrl ?? BRIDGE_CANDIDATES[0];
+    const res = await fetch(`${base}/api/chat`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        // A bridge reachable beyond loopback requires this; a local one
+        // ignores it. Sending it unconditionally keeps the two paths identical.
+        ...(BRIDGE_TOKEN ? { Authorization: `Bearer ${BRIDGE_TOKEN}` } : {}),
+      },
       body: JSON.stringify({ messages, sessionId: this.sessionId }),
       signal,
     });
+    if (res.status === 401) {
+      throw new Error(
+        'The bridge rejected your access token. Set it with ' +
+          "localStorage.setItem('v4d3r.bridgeToken', '…') and reload.",
+      );
+    }
     if (!res.ok || !res.body) {
       throw new Error(`Bridge refused the transmission (${res.status}): ${await res.text()}`);
     }

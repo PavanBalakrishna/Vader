@@ -8,10 +8,13 @@
     "node": ">=20"
   },
   "scripts": {
+    "start": "node server/src/index.js",
     "bridge": "node server/src/index.js",
     "web": "node server/src/static-only.js",
     "login": "node server/src/index.js --login",
-    "vendor": "esbuild scripts/vendor-entry.js --bundle --format=esm --platform=browser --target=es2022 --minify --legal-comments=none --outfile=web/js/vendor/anthropic-sdk.js"
+    "vendor": "esbuild scripts/vendor-entry.js --bundle --format=esm --platform=browser --target=es2022 --minify --legal-comments=none --outfile=web/js/vendor/anthropic-sdk.js",
+    "docker:build": "docker build -t lord-v4d3r .",
+    "docker:run": "docker run --rm -p 127.0.0.1:8787:8787 lord-v4d3r"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.260",

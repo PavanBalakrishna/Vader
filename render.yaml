@@ -1,0 +1,67 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  Render Blueprint — https://render.com/docs/blueprint-spec
+#
+#  Push this repo to GitHub, then Render → New → Blueprint → pick the repo.
+#  Everything below is free-tier: one Docker web service, no disk, no database.
+#
+#  Free-tier facts worth knowing before you point people at the URL:
+#    • the service sleeps after ~15 minutes with no traffic, and the next
+#      request pays a cold start of roughly a minute while the container boots
+#    • there is no persistent disk, so anything written inside the container
+#      (including a token from `npm run login`) is gone on the next deploy
+#    • free web services get 750 instance-hours a month across the account
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  - type: web
+    name: lord-v4d3r
+    runtime: docker
+    plan: free
+    # Free instances are offered in Render's core regions; oregon is the
+    # default. Change it if your users are elsewhere.
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # Render uses this to decide a deploy succeeded, and to detect a wedged
+    # instance. It does not keep a free service awake — only real traffic does.
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+
+    envVars:
+      # ── which half of the app this deployment is ──────────────────────────
+      #
+      # `static` serves the console and holds no Anthropic credential at all.
+      # Every visitor pastes their own key, which stays in their browser — the
+      # same trust model as the GitHub Pages deployment, and the only one that
+      # is safe to leave open to the internet.
+      #
+      # `bridge` runs the Claude Agent SDK on YOUR credential, so every visitor
+      # spends your Anthropic balance. If you switch to it you must also set
+      # V4D3R_ACCESS_TOKEN (below) or the server refuses to boot.
+      - key: V4D3R_MODE
+        value: static
+
+      - key: V4D3R_MODEL
+        value: claude-opus-5
+
+      # ── bridge mode only ─────────────────────────────────────────────────
+      #
+      # Uncomment BOTH of these to run the Agent SDK here. `generateValue` has
+      # Render mint a random secret you can read once from the dashboard; put
+      # it in each browser you want to allow with:
+      #
+      #   localStorage.setItem('v4d3r.bridgeToken', '<the value>')
+      #
+      # ANTHROPIC_API_KEY must be set in the dashboard, never in this file —
+      # `sync: false` means Render prompts for it and keeps it out of git.
+      #
+      # - key: V4D3R_ACCESS_TOKEN
+      #   generateValue: true
+      # - key: ANTHROPIC_API_KEY
+      #   sync: false
+      #
+      # Tools the bridge may use. Read/Glob/Grep see the container's own
+      # filesystem, which holds this source and your env — `none` is the
+      # honest setting for a deployment other people can talk to.
+      # - key: V4D3R_TOOLS
+      #   value: none

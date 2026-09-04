@@ -53,6 +53,35 @@ export const OAUTH = {
   },
 };
 
-/** Where the optional local Agent SDK bridge listens. */
-export const BRIDGE_URL =
-  localStorage.getItem('v4d3r.bridgeUrl') || 'http://127.0.0.1:8787';
+/**
+ * Where to look for an Agent SDK bridge, in order.
+ *
+ * A pinned `v4d3r.bridgeUrl` wins outright and nothing else is probed — if you
+ * named a bridge, silently answering from a different one would be wrong.
+ * Otherwise we try this page's own origin first, which is how the container
+ * image serves things (one process, console and bridge, no CORS), and fall
+ * back to a bridge on the visitor's own machine, which is how a GitHub Pages
+ * deployment reaches one.
+ */
+export const BRIDGE_CANDIDATES = (() => {
+  const pinned = localStorage.getItem('v4d3r.bridgeUrl');
+  if (pinned) return [pinned.replace(/\/+$/, '')];
+
+  const candidates = ['http://127.0.0.1:8787'];
+  // file:// has origin "null", and a page served over https must not be sent
+  // looking for an http bridge on its own host.
+  if (/^https?:$/.test(window.location.protocol)) {
+    candidates.unshift(window.location.origin);
+  }
+  return [...new Set(candidates)];
+})();
+
+/** First candidate — what the UI names before anything has been probed. */
+export const BRIDGE_URL = BRIDGE_CANDIDATES[0];
+
+/**
+ * Optional shared secret for a bridge that requires one (any bridge exposed
+ * beyond loopback should). Stored per-browser, sent as a bearer token, never
+ * committed anywhere: this file ships publicly.
+ */
+export const BRIDGE_TOKEN = localStorage.getItem('v4d3r.bridgeToken') || '';

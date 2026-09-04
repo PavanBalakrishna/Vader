@@ -1,0 +1,25 @@
+# Everything the image builds for itself, plus anything that must never be
+# baked into a layer. Note that a .env copied into an image is readable by
+# anyone who can pull it — keep secrets in the platform's env var settings.
+.env
+.env.*
+!.env.example
+.v4d3r/
+credentials.json
+
+node_modules/
+npm-debug.log*
+*.log
+
+.git/
+.github/
+.gitignore
+.idea/
+.vscode/
+
+Dockerfile
+.dockerignore
+docker-compose.yml
+render.yaml
+README.md
+scripts/
